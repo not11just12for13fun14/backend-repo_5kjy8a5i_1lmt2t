@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,7 +8,8 @@ from pydantic import BaseModel, EmailStr
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 
-from database import db
+from database import db, create_document, get_documents
+from schemas import DemoRequest
 
 app = FastAPI()
 
@@ -94,7 +95,6 @@ def get_current_user(authorization: Optional[str] = Header(None)) -> UserOut:
         sub = payload.get("sub")
         if not sub:
             raise HTTPException(status_code=401, detail="Invalid token")
-        u = users_col().find_one({"_id": db.client.get_default_database().client.get_default_database() if False else None})
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -191,6 +191,57 @@ def login(body: LoginBody):
 @app.get("/auth/me", response_model=UserOut)
 def me(current_user: UserOut = Depends(get_current_user)):
     return current_user
+
+
+# ======================
+# Demo Request endpoints
+# ======================
+class DemoRequestIn(BaseModel):
+    name: str
+    email: EmailStr
+    school: Optional[str] = None
+    message: Optional[str] = None
+    preferred_time: Optional[str] = None
+
+
+class DemoRequestOut(DemoRequestIn):
+    id: str
+
+
+def demo_col():
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not available")
+    return db["demorequest"]
+
+
+def serialize_demo(doc) -> DemoRequestOut:
+    return DemoRequestOut(
+        id=str(doc.get("_id")),
+        name=doc.get("name"),
+        email=doc.get("email"),
+        school=doc.get("school"),
+        message=doc.get("message"),
+        preferred_time=doc.get("preferred_time"),
+    )
+
+
+@app.post("/demo/request", response_model=DemoRequestOut)
+def create_demo_request(payload: DemoRequestIn):
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not available")
+    doc = payload.model_dump()
+    doc["created_at"] = datetime.now(timezone.utc)
+    doc["updated_at"] = datetime.now(timezone.utc)
+    res = demo_col().insert_one(doc)
+    saved = demo_col().find_one({"_id": res.inserted_id})
+    return serialize_demo(saved)
+
+
+@app.get("/demo/requests", response_model=List[DemoRequestOut])
+def list_demo_requests(current_user: UserOut = Depends(get_current_user)):
+    # Protected: only authenticated users can see submitted demo requests
+    docs = demo_col().find().sort("created_at", -1)
+    return [serialize_demo(d) for d in docs]
 
 
 if __name__ == "__main__":

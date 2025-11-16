@@ -30,6 +30,16 @@ class Session(BaseModel):
     created_at: Optional[datetime] = None
     expires_at: Optional[datetime] = None
 
+# Demo request schema (for "Request a Demo" feature)
+class DemoRequest(BaseModel):
+    name: str = Field(..., description="Full name of requester")
+    email: EmailStr
+    school: Optional[str] = Field(None, description="School or organization name")
+    message: Optional[str] = Field(None, description="Additional context or goals")
+    preferred_time: Optional[str] = Field(None, description="Preferred time for demo call")
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
 # Example business schemas (kept for reference)
 class User(BaseModel):
     name: str = Field(..., description="Full name")
